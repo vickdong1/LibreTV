@@ -75,7 +75,7 @@ export async function onRequest(context) {
     // 验证代理请求的鉴权
     async function validateAuth(request, env) {
         const url = new URL(request.url);
-        const authHash = url.searchParams.get('auth');
+        const passwordAttempt = url.searchParams.get('auth'); // 获取客户端提供的密码
         const timestamp = url.searchParams.get('t');
         
         // 获取服务器端密码
@@ -85,21 +85,9 @@ export async function onRequest(context) {
             return false;
         }
         
-        // 使用 SHA-256 哈希算法（与其他平台保持一致）
-        // 在 Cloudflare Workers 中使用 crypto.subtle
-        try {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(serverPassword);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const serverPasswordHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            
-            if (!authHash || authHash !== serverPasswordHash) {
-                console.warn('代理请求鉴权失败：密码哈希不匹配');
-                return false;
-            }
-        } catch (error) {
-            console.error('计算密码哈希失败:', error);
+        // 直接比较密码原文（修复了哈希比较问题）
+        if (!passwordAttempt || passwordAttempt !== serverPassword) {
+            console.warn('代理请求鉴权失败：密码不匹配');
             return false;
         }
         
@@ -114,18 +102,6 @@ export async function onRequest(context) {
         }
         
         return true;
-    }
-
-    // 验证鉴权（主函数调用）
-    if (!validateAuth(request, env)) {
-        return new Response('Unauthorized', { 
-            status: 401,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
-                'Access-Control-Allow-Headers': '*'
-            }
-        });
     }
 
     // 输出调试日志 (需要设置 DEBUG: true 环境变量)
@@ -479,7 +455,7 @@ export async function onRequest(context) {
                  waitUntil(kvNamespace.put(cacheKey, processedVariant, { expirationTtl: CACHE_TTL }));
                  logDebug(`已将处理后的子列表写入缓存: ${bestVariantUrl}`);
              } catch (kvError) {
-                 logDebug(`向 KV 写入缓存失败 (${cacheKey}): ${kvError.message}`);
+                 logDebug(`向 KV 写入缓存失败 (${cacheKey)`: ${kvError.message}`);
                  // 写入失败不影响返回结果
              }
         }
